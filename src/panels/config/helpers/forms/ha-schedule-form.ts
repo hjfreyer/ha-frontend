@@ -19,6 +19,7 @@ import { weekdays } from "../../../../data/schedule";
 import { TimeZone } from "../../../../data/translation";
 import { haStyle } from "../../../../resources/styles";
 import type { HomeAssistant } from "../../../../types";
+import type { ScheduleBlockInfo } from "./show-dialog-schedule-block-info";
 import { showScheduleBlockInfoDialog } from "./show-dialog-schedule-block-info";
 
 const defaultFullCalendarConfig: CalendarOptions = {
@@ -361,23 +362,29 @@ class HaScheduleForm extends LitElement {
     const [day, index] = info.event.id.split("-");
     const item = [...this[`_${day}`]][index];
     showScheduleBlockInfoDialog(this, {
-      block: item,
+      block: { ...item, weekday: day },
       updateBlock: (newBlock) => this._updateBlock(day, index, newBlock),
       deleteBlock: () => this._deleteBlock(day, index),
     });
   }
 
-  private _updateBlock(day, index, newBlock) {
-    const [fromH, fromM, _fromS] = newBlock.from.split(":");
-    newBlock.from = `${fromH}:${fromM}`;
-    const [toH, toM, _toS] = newBlock.to.split(":");
-    newBlock.to = `${toH}:${toM}`;
+  private _updateBlock(day, index, newBlock: ScheduleBlockInfo) {
+    const { weekday: newDay, ...block } = newBlock;
+    const [fromH, fromM, _fromS] = block.from.split(":");
+    block.from = `${fromH}:${fromM}`;
+    const [toH, toM, _toS] = block.to.split(":");
+    block.to = `${toH}:${toM}`;
     if (Number(toH) === 0 && Number(toM) === 0) {
-      newBlock.to = "24:00";
+      block.to = "24:00";
     }
     const newValue = { ...this._item };
     newValue[day] = [...this._item![day]];
-    newValue[day][index] = newBlock;
+    if (newDay === day) {
+      newValue[day][index] = block;
+    } else {
+      newValue[day].splice(index, 1);
+      newValue[newDay] = [...this[`_${newDay}`], block];
+    }
 
     fireEvent(this, "value-changed", {
       value: newValue,

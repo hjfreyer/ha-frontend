@@ -2,11 +2,15 @@ import type { CSSResultGroup } from "lit";
 import { html, LitElement, nothing } from "lit";
 import memoizeOne from "memoize-one";
 import { customElement, property, state } from "lit/decorators";
+import { firstWeekdayIndex } from "../../../../common/datetime/first_weekday";
+import type { WeekdayIndex } from "../../../../common/datetime/weekday";
 import { fireEvent } from "../../../../common/dom/fire_event";
+import type { LocalizeFunc } from "../../../../common/translations/localize";
 import "../../../../components/ha-dialog-footer";
 import "../../../../components/ha-dialog";
 import "../../../../components/ha-form/ha-form";
 import "../../../../components/ha-button";
+import { weekdays } from "../../../../data/schedule";
 import { DirtyStateProviderMixin } from "../../../../mixins/dirty-state-provider-mixin";
 import { haStyleDialog } from "../../../../resources/styles";
 import type { HomeAssistant } from "../../../../types";
@@ -14,7 +18,10 @@ import type {
   ScheduleBlockInfo,
   ScheduleBlockInfoDialogParams,
 } from "./show-dialog-schedule-block-info";
-import type { SchemaUnion } from "../../../../components/ha-form/types";
+import type {
+  HaFormSchema,
+  SchemaUnion,
+} from "../../../../components/ha-form/types";
 
 @customElement("dialog-schedule-block-info")
 class DialogScheduleBlockInfo extends DirtyStateProviderMixin<ScheduleBlockInfo>()(
@@ -32,31 +39,50 @@ class DialogScheduleBlockInfo extends DirtyStateProviderMixin<ScheduleBlockInfo>
 
   private _expand = false;
 
-  private _schema = memoizeOne((expand: boolean) => [
-    {
-      name: "from",
-      required: true,
-      selector: { time: { no_second: true } },
-    },
-    {
-      name: "to",
-      required: true,
-      selector: { time: { no_second: true } },
-    },
-    {
-      name: "more_options",
-      type: "expandable" as const,
-      flatten: true,
-      expanded: expand,
-      schema: [
+  private _schema = memoizeOne(
+    (localize: LocalizeFunc, firstWeekday: WeekdayIndex, expand: boolean) =>
+      [
         {
-          name: "data",
-          required: false,
-          selector: { object: {} },
+          name: "weekday",
+          required: true,
+          selector: {
+            select: {
+              mode: "dropdown",
+              options: [
+                ...weekdays.slice(firstWeekday),
+                ...weekdays.slice(0, firstWeekday),
+              ].map((day) => ({
+                value: day,
+                label: localize(`ui.weekdays.${day}`),
+              })),
+            },
+          },
         },
-      ],
-    },
-  ]);
+        {
+          name: "from",
+          required: true,
+          selector: { time: { no_second: true } },
+        },
+        {
+          name: "to",
+          required: true,
+          selector: { time: { no_second: true } },
+        },
+        {
+          name: "more_options",
+          type: "expandable",
+          flatten: true,
+          expanded: expand,
+          schema: [
+            {
+              name: "data",
+              required: false,
+              selector: { object: {} },
+            },
+          ],
+        },
+      ] as const satisfies HaFormSchema[]
+  );
 
   public showDialog(params: ScheduleBlockInfoDialogParams): void {
     this._params = params;
@@ -95,7 +121,11 @@ class DialogScheduleBlockInfo extends DirtyStateProviderMixin<ScheduleBlockInfo>
           <ha-form
             autofocus
             .hass=${this.hass}
-            .schema=${this._schema(this._expand)}
+            .schema=${this._schema(
+              this.hass.localize,
+              firstWeekdayIndex(this.hass.locale),
+              this._expand
+            )}
             .data=${this._data}
             .error=${this._error}
             .computeLabel=${this._computeLabelCallback}
@@ -151,6 +181,10 @@ class DialogScheduleBlockInfo extends DirtyStateProviderMixin<ScheduleBlockInfo>
     schema: SchemaUnion<ReturnType<typeof this._schema>>
   ) => {
     switch (schema.name) {
+      case "weekday":
+        return this.hass!.localize(
+          "ui.dialogs.helper_settings.schedule.weekday"
+        );
       case "from":
         return this.hass!.localize("ui.dialogs.helper_settings.schedule.start");
       case "to":

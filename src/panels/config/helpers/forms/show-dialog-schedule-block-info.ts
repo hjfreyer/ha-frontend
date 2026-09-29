@@ -1,6 +1,8 @@
 import { fireEvent } from "../../../../common/dom/fire_event";
+import type { Weekday } from "../../../../data/schedule";
 
 export interface ScheduleBlockInfo {
+  weekday: Weekday;
   from: string;
   to: string;
   data?: Record<string, any>;
